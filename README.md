@@ -1,105 +1,127 @@
-MLOptimizer: Automated Machine Learning Model Generation & Hardware Optimization
+# MLOptimizer
 
-<img alt="TensorFlow" src="https://img.shields.io/badge/TensorFlow-2.x-orange.svg">
-<img alt="Python" src="https://img.shields.io/badge/Python-3.10-blue.svg">
-MLOptimizer is a comprehensive framework for automatically generating optimized machine learning models while capturing detailed hardware performance metrics. It provides a distributed system for model training, hyperparameter optimization, and hardware resource monitoring.
+[![Python](https://img.shields.io/badge/Python-3.10-blue.svg)](https://www.python.org/)
+[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-orange.svg)](https://www.tensorflow.org/)
+[![Optuna](https://img.shields.io/badge/Optuna-TPE-brightgreen.svg)](https://optuna.org/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Features
-Automated Model Generation: Automatically design and train models for:
+AutoML framework with Bayesian hyperparameter optimization (Optuna TPE), distributed master/slave architecture, and real-time hardware performance monitoring.
 
-Image classification
-Regression (simple and multiple output)
-Time series prediction
-Hardware Performance Optimization:
+## Features
 
-Real-time GPU metrics tracking (memory, utilization, temperature)
-CPU resource monitoring
-Idle time detection and reporting
-Training latency measurements
-Distributed Architecture:
+- **Bayesian Hyperparameter Optimization** — Optuna TPE sampler with custom `RepeatPruner` to avoid redundant trials
+- **Two-Phase Training** — Exploration phase rapidly evaluates diverse architectures, then a Hall of Fame phase fully trains the top candidates
+- **Automated Model Generation** — Dynamically builds CNN, Inception, MLP, and LSTM architectures for image classification, regression, and time series
+- **Distributed Architecture** — Master/slave nodes communicate via RabbitMQ; supports multi-GPU and cloud deployments
+- **Hardware Monitoring** — Real-time GPU metrics (utilization, memory, temperature, power, clocks, PCIe), CPU metrics (per-core, RAM, swap), and latency measurements
+- **Fault Tolerance** — Queue deduplication, state persistence with resume capability, crash recovery via subprocess isolation
+- **Slack & Google Drive Integration** — Optional notifications and results upload
+- **State Resume** — Periodically saves optimization state so interrupted runs can continue
 
-Master/slave processing model
-RabbitMQ-based communication
-Fault tolerance with automatic retry mechanisms
-Comprehensive Reporting:
+## Architecture
 
-Detailed performance metrics in JSON format
-Hardware utilization summaries  
-Model architecture snapshots
-System Requirements
-Python 3.10+
-TensorFlow 2.x
-CUDA-compatible GPU
-RabbitMQ server
-Installation
+```
+┌──────────────┐    parameters queue    ┌──────────────┐
+│   Master     │───────────────────────▶│    Slave     │
+│   Node       │                        │   Node(s)    │
+│  (Optuna)    │◀───────────────────────│  (Training)  │
+└──────────────┘    results queue       └──────────────┘
+```
 
-# Clone the repository
+| Component | Role |
+|-----------|------|
+| **Master Node** | Runs Optuna TPE optimization, generates architectures, coordinates exploration/HoF phases, persists state |
+| **Slave Node** | Receives architecture parameters, trains models in isolated subprocess, collects hardware metrics |
+| **RabbitMQ** | Async message broker between master and slaves |
+| **GPUMetricsCollector** | Captures GPU/CPU/latency metrics in real time |
+| **HardwarePerformanceLogger** | Saves portable JSON logs with model architecture, training info, and hardware data |
+
+## Requirements
+
+- Python 3.10+
+- TensorFlow 2.x (CUDA-compatible GPU recommended)
+- RabbitMQ server (local or cloud-tunneled)
+
+## Installation
+
+```bash
 git clone https://github.com/yourusername/mloptimizer.git
 cd mloptimizer
 
-# Create and activate conda environment
+# Conda (recommended)
 conda create -n mlopt python=3.10
 conda activate mlopt
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Start RabbitMQ (if not already running)
-sudo systemctl start rabbitmq-serverv
+# Or use the unified runner
+python run.py --install
 
+# Start RabbitMQ
+sudo systemctl start rabbitmq-server
+```
 
-# Start the system (master and slave processes)
-cd cloudDeployment
-./den.sh
+## Usage
 
+### Quick Start (local master + slave)
 
-Architecture
-MLOptimizer consists of several key components:
+```bash
+python run.py
+```
 
-Master Process: Coordinates training jobs and optimization strategy
-Slave Process: Executes model training and collects performance metrics
-GPU Metrics Collector: Captures detailed hardware performance data
-Socket Communication: Provides messaging between components
-Model Generator: Creates model architectures based on problem specifications
-Usage Examples
-Training an Image Classification Model
+### Separate Nodes
 
+```bash
+# Terminal 1 — master
+python run.py --master
 
-from app.common.dataset import Dataset
-from app.common.model import Model
-from app.common.search_space import SearchSpaceType
+# Terminal 2 — slave
+python run.py --slave --dataset=cifar10 --gpu=0
+```
 
-# Configure dataset
-dataset = Dataset(dataset_path="path/to/images", type=SearchSpaceType.IMAGE)
+### Cloud Deployment
 
-# Create and train model
-model = Model(dataset=dataset)
-accuracy = model.build_and_train()
-print(f"Model accuracy: {accuracy}")
+```bash
+python run.py --master --host="your.ngrok.io" --port=12345 --cloud-mode=1
+```
 
-Analyzing Hardware Performance
+### Programmatic API
 
+```python
+from app.init_nodes import InitNodes
+from system_parameters import SystemParameters as SP
 
-# Access metrics after training
-metrics_dir = model.get_metrics_directory()
-print(f"Performance metrics saved to: {metrics_dir}")
+SP.DATASET_NAME = 'cifar10'
+SP.DATASET_TYPE = 1   # 1=Image, 2=Regression, 3=TimeSeries
+SP.TRIALS = 20
 
-# Example metrics include:
-# - GPU utilization
-# - Memory usage
-# - Training latency
-# - Idle time periods
+# Start master
+InitNodes().master()
 
+# Start slave (separate process)
+InitNodes().slave()
+```
 
-Documentation
-For more detailed documentation, see the following:
+## Configuration
 
-Hardware Metrics Guide
-Model Architecture Options
-Optimization Strategies
-License
-This project is licensed under the MIT License - see the LICENSE file for details.
+Edit `system_parameters.py` to control:
 
-Contributing
-Contributions are welcome! Please feel free to submit a Pull Request.# mloptimizer
-# AutoMlOptimizer
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `DATASET_NAME` | `cifar10` | Dataset to use |
+| `DATASET_TYPE` | `1` | 1=Image, 2=Regression, 3=TimeSeries |
+| `TRIALS` | `10` | Total Optuna trials |
+| `EXPLORATION_SIZE` | `5` | Models in exploration phase |
+| `EXPLORATION_EPOCHS` | `5` | Epochs per exploration model |
+| `HALL_OF_FAME_SIZE` | `3` | Top models promoted to deep training |
+| `HALL_OF_FAME_EPOCHS` | `6` | Epochs for deep training |
+
+## Tests
+
+```bash
+python -m unittest tests/test_architecture.py -v
+python -m unittest tests/test_system.py -v
+```
+
+## License
+
+MIT
