@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10-blue.svg)](https://www.python.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-orange.svg)](https://www.tensorflow.org/)
 [![Optuna](https://img.shields.io/badge/Optuna-TPE-brightgreen.svg)](https://optuna.org/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 
 AutoML framework with Bayesian hyperparameter optimization (Optuna TPE), distributed master/slave architecture, and real-time hardware performance monitoring.
 
@@ -122,6 +122,4 @@ python -m unittest tests/test_architecture.py -v
 python -m unittest tests/test_system.py -v
 ```
 
-## License
 
-MIT
